@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD COLUMN is_temporary_password BOOLEAN NOT NULL DEFAULT TRUE;
