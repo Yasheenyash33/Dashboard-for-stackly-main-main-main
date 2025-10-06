@@ -398,13 +398,6 @@ After running the sample data script, you can use these credentials:
   - Username: `admin`
   - Password: `admin123`
 
-- **Trainer:**
-  - Username: `john_trainer`
-  - Password: `trainer123`
-
-- **Trainee:**
-  - Username: `alice_trainee`
-  - Password: `trainee123`
 
 ## API Documentation
 
@@ -467,7 +460,13 @@ training-management-system/
 - `DB_PORT` - MySQL port (default: 3306)
 - `DB_NAME` - Database name (default: training_app)
 - `SECRET_KEY` - JWT secret key
-
+- 
+DB_USER=training_user
+DB_PASSWORD=training_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=training_app
+SECRET_KEY=your-secret-key-here-change-this-in-production
 ## Contributing
 
 1. Fork the repository
