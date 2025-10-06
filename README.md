@@ -138,13 +138,6 @@ The Training Management System is designed to streamline the process of organizi
 3. **Access the Application:**
    Open your browser and navigate to `http://localhost:5173`
 
-#### Option 2: Local Development with Docker Desktop
-
-*This option has been removed as per user request. Please use Option 1 for local development without Docker.*
-
-<!-- Removed Docker Desktop instructions -->
-
-
 ## 🔐 User Roles & Access
 
 ### Description of Roles
