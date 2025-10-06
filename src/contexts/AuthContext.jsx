@@ -37,6 +37,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [ws, setWs] = useState(null);
   const [assignments, setAssignments] = useState([]);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
   // Helper to attach auth header
   const authHeaders = useCallback(() => ({
@@ -60,6 +61,8 @@ export function AuthProvider({ children }) {
   // Fetch initial data from backend
   const fetchInitialData = useCallback(async () => {
     if (!token || !user) return;
+    console.log('fetchInitialData called');
+    setIsDataLoading(true);
     try {
       const fetches = [
       fetch(`${API_BASE_URL}/sessions/`, { headers: authHeaders(), credentials: 'include' }),
@@ -70,7 +73,10 @@ export function AuthProvider({ children }) {
         usersPromise = fetch(`${API_BASE_URL}/users/`, { headers: authHeaders(), credentials: 'include' });
         fetches.push(usersPromise);
       }
-      const responses = await Promise.all(fetches);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 10000);
+      });
+      const responses = await Promise.race([Promise.all(fetches), timeoutPromise]);
       const sessionsRes = responses[0];
       const assignmentsRes = responses[1];
       const usersRes = responses.length > 2 ? responses[2] : null;
@@ -111,8 +117,17 @@ export function AuthProvider({ children }) {
           setUsers(usersData);
         }
       }
+      console.log('fetchInitialData completed successfully');
     } catch (error) {
       console.error('Error fetching initial data:', error);
+      // Set empty data on error
+      setSessions([]);
+      setAssignments([]);
+      if (user.role === 'admin' || user.role === 'trainer') {
+        setUsers([]);
+      }
+    } finally {
+      setIsDataLoading(false);
     }
   }, [token, user, authHeaders, logout]);
   
@@ -169,7 +184,7 @@ export function AuthProvider({ children }) {
     let reconnectTimeout;
 
     const connect = () => {
-      socket = new WebSocket(WS_BASE_URL);
+      socket = new WebSocket(`${WS_BASE_URL}/ws?token=${token}`);
       socket.onopen = () => {
         console.log('WebSocket connected');
         setWs(socket);
@@ -217,8 +232,6 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
       }
-    } else {
-      console.log('No stored user/token in localStorage');
     }
     setLoading(false);
   }, []);
@@ -519,6 +532,7 @@ export function AuthProvider({ children }) {
     assignments,
     notifications,
     loading,
+    isDataLoading,
     token,
     login,
     logout,

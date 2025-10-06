@@ -15,8 +15,20 @@ import { UserManagement } from './components/Users/UserManagement';
 import { Analytics } from './components/Analytics/Analytics';
 import { Settings } from './components/Settings/Settings';
 
+function Loading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white text-xl">
+      Loading...
+    </div>
+  );
+}
+
 function AppContent() {
-  const { user } = useAuth();
+  const { user, loading, isDataLoading } = useAuth();
+
+  if (loading || isDataLoading) {
+    return <Loading />;
+  }
 
   if (!user) {
     return <Login />;

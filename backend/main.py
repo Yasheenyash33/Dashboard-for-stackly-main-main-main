@@ -60,7 +60,21 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, token: str = None):
+        # Verify token on WebSocket connection
+        if token is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username: str = payload.get("sub")
+            if username is None:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+        except jwt.PyJWTError:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
         await websocket.accept()
         self.active_connections.append(websocket)
         logging.info(f"WebSocket connection established. Total connections: {len(self.active_connections)}")
@@ -478,15 +492,17 @@ def generate_report(format: str = "pdf", db: Session = Depends(get_db), current_
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Extract token from query params
+    token = websocket.query_params.get("token")
+    await manager.connect(websocket, token)
+    if websocket not in manager.active_connections:
+        return
     try:
-        await websocket.accept()
-        await manager.connect(websocket)
-        try:
-            while True:
-                data = await websocket.receive_text()
-                await manager.broadcast(f"Client message: {data}")
-        except WebSocketDisconnect:
-            manager.disconnect(websocket)
+        while True:
+            data = await websocket.receive_text()
+            await manager.broadcast(f"Client message: {data}")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
     except Exception as e:
         print(f"WebSocket error: {e}")
         if websocket in manager.active_connections:
