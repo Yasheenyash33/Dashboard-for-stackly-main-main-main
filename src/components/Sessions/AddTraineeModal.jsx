@@ -6,8 +6,8 @@ export function AddTraineeModal({ session, onClose, onSuccess }) {
   const { users, updateSession } = useAuth();
   const [selectedTrainees, setSelectedTrainees] = useState([]);
 
-  const availableTrainees = users.filter(u => 
-    u.role === 'trainee' && !session.trainees.includes(u.id)
+  const availableTrainees = users.filter(u =>
+    u.role === 'trainee' && !(session.trainees || []).includes(u.id)
   );
 
   const handleTraineeToggle = (traineeId) => {
@@ -20,7 +20,7 @@ export function AddTraineeModal({ session, onClose, onSuccess }) {
 
   const handleSubmit = () => {
     if (selectedTrainees.length > 0) {
-      const updatedTrainees = [...session.trainees, ...selectedTrainees];
+      const updatedTrainees = [...(session.trainees || []), ...selectedTrainees];
       updateSession(session.id, { trainees: updatedTrainees });
       onSuccess();
     }
