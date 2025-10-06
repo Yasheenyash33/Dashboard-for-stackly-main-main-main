@@ -110,11 +110,11 @@ export function UserManagement() {
                       <div className="flex items-center">
                         <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
                           <span className="text-white font-medium">
-                            {u.name.charAt(0).toUpperCase()}
+                            {u.first_name ? u.first_name.charAt(0).toUpperCase() : ''}
                           </span>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-white">{u.name}</div>
+                          <div className="text-sm font-medium text-white">{`${u.first_name} ${u.last_name}`}</div>
                           <div className="text-sm text-gray-400">{u.email}</div>
                         </div>
                       </div>
@@ -129,7 +129,7 @@ export function UserManagement() {
                         {u.role === 'trainee' ? (
                           <div className="flex items-center justify-between">
                             <span>
-                              {trainer ? trainer.name : 'Unassigned'}
+                              {trainer ? `${trainer.first_name} ${trainer.last_name}` : 'Unassigned'}
                             </span>
                             <button
                               onClick={() => handleAssignTrainer(u)}

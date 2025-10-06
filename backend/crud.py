@@ -3,6 +3,8 @@ from sqlalchemy import and_
 from passlib.context import CryptContext
 from typing import List, Optional
 from datetime import datetime
+import secrets
+import string
 
 from . import models, schemas
 
@@ -24,8 +26,15 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
 def get_users_by_role(db: Session, role: models.UserRole):
     return db.query(models.User).filter(models.User.role == role).all()
 
+def generate_temporary_password(length: int = 12):
+    """Generate a secure random temporary password."""
+    characters = string.ascii_letters + string.digits + "!@#$%^&*"
+    return ''.join(secrets.choice(characters) for _ in range(length))
+
 def create_user(db: Session, user: schemas.UserCreate):
-    hashed_password = pwd_context.hash(user.password)
+    # Generate a random temporary password
+    temporary_password = generate_temporary_password()
+    hashed_password = pwd_context.hash(temporary_password)
     db_user = models.User(
         username=user.username,
         email=user.email,
@@ -38,7 +47,8 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
+    # Return both the user and the plain text temporary password for secure sharing
+    return db_user, temporary_password
 
 def update_user(db: Session, user_id: int, user_update: schemas.UserUpdate):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()

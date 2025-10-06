@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, computed_field
 from datetime import datetime
 from typing import Optional
 from enum import Enum
@@ -36,10 +36,13 @@ class UserUpdate(BaseModel):
 
 class User(UserBase):
     id: int
-    name: str
     is_temporary_password: bool
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    def name(self) -> str:
+        return f"{self.first_name} {self.last_name}"
 
     class Config:
         from_attributes = True

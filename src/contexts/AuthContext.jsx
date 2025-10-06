@@ -312,18 +312,11 @@ export function AuthProvider({ children }) {
     const canProceed = await checkBackendAndToken();
     if (!canProceed) return null;
     try {
-      // Ensure isTemporary is mapped to is_temporary_password for backend
-      const payload = {
-        ...userData,
-        is_temporary_password: userData.isTemporary ?? true,
-      };
-      delete payload.isTemporary;
-
       const res = await fetch(`${API_BASE_URL}/users/`, {
         method: 'POST',
         headers: authHeaders(),
         credentials: 'include',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(userData),
       });
       if (!res.ok) {
         const errorData = await res.json();
@@ -337,10 +330,10 @@ export function AuthProvider({ children }) {
         }
         throw new Error(errorMessage);
       }
-      const newUser = await res.json();
+      const responseData = await res.json();
       // Update users state immediately for immediate UI update
-      setUsers(prev => [...prev, newUser]);
-      return newUser;
+      setUsers(prev => [...prev, responseData.user]);
+      return responseData;
     } catch (error) {
       console.error('Create user error:', error.message || error);
       // Show user-friendly error message

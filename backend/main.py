@@ -1,9 +1,59 @@
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Request
+import os
+import sys
+import jwt
+import json
+import io
+import logging
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+from fastapi import (
+    FastAPI,
+    Depends,
+    HTTPException,
+    status,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+)
+from fastapi.responses import (
+    StreamingResponse,
+    Response,
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+)
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from .config import get_settings
+
+# Initialize FastAPI app
+app = FastAPI(title="Training Management API", version="1.0.0")
+
+# Get application settings
+settings = get_settings()
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+
+# CORS middleware configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_CREDENTIALS,
+    allow_methods=settings.CORS_METHODS,
+    allow_headers=settings.CORS_HEADERS,
+    expose_headers=["*"],
+    max_age=settings.CORS_MAX_AGE
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, Response, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from .config import get_settings
 from sqlalchemy.orm import Session
 from typing import List
 import jwt
@@ -20,16 +70,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 load_dotenv()
 
-from backend import models, schemas, crud, reporting
-from backend.database import engine, get_db, SessionLocal
+from . import models, schemas, crud, reporting
+from .database import engine, get_db, SessionLocal
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="Training Management API", version="1.0.0")
-
-# Mount static files
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 # CORS middleware for frontend integration
 origins = [
@@ -47,9 +92,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
-    expose_headers=["*"]
+    expose_headers=["*"],
+    max_age=3600
 )
 
 # JWT configuration
@@ -302,7 +348,7 @@ def read_user(user_id: int, db: Session = Depends(get_db), current_user: models.
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.post("/users/", response_model=schemas.User)
+@app.post("/users/")
 async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     logging.info(f"create_user called by user {current_user.username} with role {current_user.role}")
     if current_user.role != models.UserRole.admin:
@@ -315,33 +361,30 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), c
     if crud.get_user_by_email(db, user.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    created_user = crud.create_user(db, user)
+    created_user, temporary_password = crud.create_user(db, user)
 
     # Log user creation
     crud.log_user_creation(db, created_user.id, current_user.id)
 
-    # Broadcast user creation event
+    # Broadcast user creation event (without password)
     await manager.broadcast({
         "type": "user_created",
         "data": {
             "user_id": created_user.id,
             "action": "created",
-            "user": created_user.__dict__
+            "user": {
+                **created_user.__dict__,
+                'name': f"{created_user.first_name} {created_user.last_name}"
+            }
         }
     })
 
-    # Broadcast credential sharing notification
-    await manager.broadcast({
-        "type": "credentials_shared",
-        "data": {
-            "user_id": created_user.id,
-            "username": created_user.username,
-            "temporary_password": user.password,  # In production, don't send password in broadcast
-            "message": f"New account created for {created_user.name}. Username: {created_user.username}, Temporary Password: {user.password}"
-        }
-    })
-
-    return created_user
+    # Return user data with temporary password for secure sharing by admin
+    return {
+        "user": created_user,
+        "temporary_password": temporary_password,
+        "message": f"User {created_user.name} created successfully. Share the temporary password securely with the user."
+    }
 
 @app.put("/users/{user_id}", response_model=schemas.User)
 async def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -358,14 +401,28 @@ async def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session
         "data": {
             "user_id": user_id,
             "action": "updated",
-            "user": updated_user.__dict__
+            "user": {
+                **updated_user.__dict__,
+                'name': f"{updated_user.first_name} {updated_user.last_name}"
+            }
         }
     })
 
     return updated_user
 
 @app.delete("/users/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Handle CORS preflight
+    if request.method == "OPTIONS":
+        response = JSONResponse(content={})
+        origin = request.headers.get("origin")
+        if origin in origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
     if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete users")
 
@@ -382,7 +439,13 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), current_user:
         }
     })
 
-    return {"message": "User deleted successfully"}
+    # Create response with CORS headers
+    response = JSONResponse(content={"message": "User deleted successfully"})
+    origin = request.headers.get("origin")
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 # Session routes
 @app.get("/sessions/", response_model=List[schemas.Session])
@@ -555,12 +618,36 @@ def health_check():
 # Exception handlers
 from fastapi.responses import JSONResponse
 
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    if request.method == "OPTIONS":
+        response = PlainTextResponse("")
+        origin = request.headers.get("origin")
+        if origin in origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Max-Age"] = "3600"
+        return response
+    response = await call_next(request)
+    origin = request.headers.get("origin")
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
+    response = JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail}
     )
+    origin = request.headers.get("origin")
+    if origin in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -584,12 +671,17 @@ if __name__ == "__main__":
     
     logging.basicConfig(level=logging.INFO)
     
-    uvicorn.run(
-        "main:app",
+    config = uvicorn.Config(
+        "backend.main:app",
         host="localhost",
-        port=8001,
+        port=8002,
         reload=True,
         log_level="info",
         access_log=True,
-        workers=1
+        workers=1,
+        proxy_headers=True,
+        forwarded_allow_ips="*"
     )
+    
+    server = uvicorn.Server(config)
+    server.run()
