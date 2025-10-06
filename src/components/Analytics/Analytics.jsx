@@ -99,7 +99,7 @@ export function Analytics() {
 
   const handleExport = async (format) => {
     try {
-      const response = await fetch(`http://localhost:8001/reports/generate?format=${format}`, {
+      const response = await fetch(`http://localhost:8002/reports/generate?format=${format}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

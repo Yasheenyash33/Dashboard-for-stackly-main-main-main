@@ -38,16 +38,7 @@ settings = get_settings()
 # Mount static files
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
-# CORS middleware configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=settings.CORS_CREDENTIALS,
-    allow_methods=settings.CORS_METHODS,
-    allow_headers=settings.CORS_HEADERS,
-    expose_headers=["*"],
-    max_age=settings.CORS_MAX_AGE
-)
+
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, Response, FileResponse, JSONResponse
@@ -93,7 +84,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_headers=["*", "Authorization"],
     expose_headers=["*"],
     max_age=3600
 )

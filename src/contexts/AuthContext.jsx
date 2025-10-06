@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 const AuthContext = createContext({});
 
-const API_BASE_URL = 'http://localhost:8001';
-const WS_BASE_URL = 'ws://localhost:8001';
+const API_BASE_URL = 'http://localhost:8002';
+const WS_BASE_URL = 'ws://localhost:8002';
 
 // Update WebSocket connection
 const connectWebSocket = () => {

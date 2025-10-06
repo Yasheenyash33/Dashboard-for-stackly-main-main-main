@@ -126,7 +126,7 @@ The Training Management System is designed to streamline the process of organizi
 
    if email error backend\venv\Scripts\pip install -r backend/requirements.txt
    
-   The backend will start on `http://localhost:8001`
+   The backend will start on `http://localhost:8002`
 
 2. **Start the Frontend Development Server:**
    ```bash
@@ -323,7 +323,7 @@ Currently, the project does not include automated tests. Manual testing can be p
 
 4. **Run with Gunicorn:**
    ```bash
-   gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001
+   gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8002
    ```
 
 #### Frontend Deployment
@@ -345,7 +345,7 @@ Currently, the project does not include automated tests. Manual testing can be p
        }
 
        location /api/ {
-           proxy_pass http://localhost:8001/;
+           proxy_pass http://localhost:8002/;
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
        }
@@ -378,7 +378,7 @@ CORS_ORIGINS=https://your-domain.com
 - WebSocket connections may drop during network interruptions (auto-reconnection implemented)
 - Report generation for large datasets may take time
 - No automated testing suite currently implemented
-- Password reset functionality not yet implemented (users must contact admin)
+- Password reset functionality implemented (admins can reset user passwords)
 
 ### Future Improvements or Roadmap
 - Implement automated testing with pytest and React Testing Library
@@ -409,8 +409,8 @@ After running the sample data script, you can use these credentials:
 ## API Documentation
 
 The FastAPI backend provides automatic API documentation at:
-- Swagger UI: `http://localhost:8001/docs`
-- ReDoc: `http://localhost:8001/redoc`
+- Swagger UI: `http://localhost:8002/docs`
+- ReDoc: `http://localhost:8002/redoc`
 
 ## Project Structure
 
