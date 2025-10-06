@@ -127,9 +127,12 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 def get_current_user(db: Session = Depends(get_db), username: str = Depends(verify_token)):
+    logging.info(f"get_current_user called with username: {username}")
     user = crud.get_user_by_username(db, username)
     if not user:
+        logging.warning(f"User not found for username: {username}")
         raise HTTPException(status_code=404, detail="User not found")
+    logging.info(f"User found: {user.username} with role: {user.role}")
     return user
 
 # Authentication routes
@@ -150,7 +153,7 @@ def login(login_data: schemas.LoginRequest, db: Session = Depends(get_db)):
 @app.post("/auth/change-password")
 async def change_password(request: schemas.ChangePasswordRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # For non-admin users, verify current password
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         if not request.current_password:
             raise HTTPException(status_code=400, detail="Current password required")
         if not crud.authenticate_user(db, current_user.username, request.current_password):
@@ -172,7 +175,7 @@ async def change_password(request: schemas.ChangePasswordRequest, db: Session = 
 
 @app.post("/auth/reset-password/{user_id}")
 async def reset_password(user_id: int, request: schemas.ResetPasswordRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can reset passwords")
 
     target_user = crud.get_user(db, user_id)
@@ -196,7 +199,7 @@ async def reset_password(user_id: int, request: schemas.ResetPasswordRequest, db
 
 @app.post("/auth/admin-change-password")
 async def admin_change_password(request: schemas.ChangePasswordRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can change password without current password")
 
     updated_user = crud.change_password(db, current_user.id, request.new_password, current_user.id)
@@ -216,7 +219,7 @@ async def admin_change_password(request: schemas.ChangePasswordRequest, db: Sess
 # AssignedStudent routes
 @app.get("/assignments/", response_model=List[schemas.AssignedStudentWithDetails])
 def read_assignments(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "trainer"]:
+    if current_user.role.value not in ["admin", "trainer"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     assignments = crud.get_assigned_students(db, skip=skip, limit=limit)
     # Load relationships
@@ -232,7 +235,7 @@ def read_assignments(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 @app.post("/assignments/", response_model=schemas.AssignedStudent)
 async def assign_student(assignment: schemas.AssignedStudentCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can assign students")
 
     # Check if student and teacher exist
@@ -260,7 +263,7 @@ async def assign_student(assignment: schemas.AssignedStudentCreate, db: Session 
 
 @app.delete("/assignments/{student_id}/{teacher_id}")
 async def unassign_student(student_id: int, teacher_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can unassign students")
 
     success = crud.unassign_student_from_teacher(db, student_id, teacher_id)
@@ -282,7 +285,7 @@ async def unassign_student(student_id: int, teacher_id: int, db: Session = Depen
 @app.get("/users/", response_model=List[schemas.User])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     logging.info(f"read_users called by user {current_user.username} with role {current_user.role}")
-    if current_user.role not in ["admin", "trainer"]:
+    if current_user.role.value not in ["admin", "trainer"]:
         logging.warning(f"User {current_user.username} not authorized for users")
         raise HTTPException(status_code=403, detail="Not authorized")
     users = crud.get_users(db, skip=skip, limit=limit)
@@ -292,7 +295,7 @@ def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), c
 
 @app.get("/users/{user_id}", response_model=schemas.User)
 def read_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "trainer"] and current_user.id != user_id:
+    if current_user.role.value not in ["admin", "trainer"] and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     user = crud.get_user(db, user_id=user_id)
     if user is None:
@@ -301,7 +304,9 @@ def read_user(user_id: int, db: Session = Depends(get_db), current_user: models.
 
 @app.post("/users/", response_model=schemas.User)
 async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    logging.info(f"create_user called by user {current_user.username} with role {current_user.role}")
+    if current_user.role != models.UserRole.admin:
+        logging.warning(f"User {current_user.username} with role {current_user.role} not authorized to create users")
         raise HTTPException(status_code=403, detail="Only admins can create users")
 
     # Check if username or email already exists
@@ -340,7 +345,7 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), c
 
 @app.put("/users/{user_id}", response_model=schemas.User)
 async def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin" and current_user.id != user_id:
+    if current_user.role.value != "admin" and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     updated_user = crud.update_user(db, user_id, user_update)
@@ -361,7 +366,7 @@ async def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session
 
 @app.delete("/users/{user_id}")
 async def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete users")
 
     success = crud.delete_user(db, user_id)
@@ -397,7 +402,7 @@ def read_session(session_id: int, db: Session = Depends(get_db), current_user: m
 
 @app.post("/sessions/", response_model=schemas.Session)
 async def create_session(session: schemas.SessionCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "trainer"]:
+    if current_user.role.value not in ["admin", "trainer"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     created_session = crud.create_session(db, session)
@@ -416,7 +421,7 @@ async def create_session(session: schemas.SessionCreate, db: Session = Depends(g
 
 @app.put("/sessions/{session_id}", response_model=schemas.Session)
 async def update_session(session_id: int, session_update: schemas.SessionUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "trainer"]:
+    if current_user.role.value not in ["admin", "trainer"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     updated_session = crud.update_session(db, session_id, session_update)
@@ -437,7 +442,7 @@ async def update_session(session_id: int, session_update: schemas.SessionUpdate,
 
 @app.delete("/sessions/{session_id}")
 async def delete_session(session_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Only admins can delete sessions")
 
     success = crud.delete_session(db, session_id)
@@ -457,20 +462,20 @@ async def delete_session(session_id: int, db: Session = Depends(get_db), current
 # Analytics routes
 @app.get("/analytics/users")
 def get_user_analytics(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
     return crud.get_user_count_by_role(db)
 
 @app.get("/analytics/sessions")
 def get_session_analytics(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
     return crud.get_session_count_by_status(db)
 
 # Report generation endpoint
 @app.get("/reports/generate")
 def generate_report(format: str = "pdf", db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
 
     users = crud.get_users(db)
@@ -548,18 +553,29 @@ def health_check():
     return {"status": "healthy"}
 
 # Exception handlers
+from fastapi.responses import JSONResponse
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return {"detail": exc.detail, "status_code": exc.status_code}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return {"detail": "Validation error", "errors": exc.errors()}
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validation error", "errors": exc.errors()}
+    )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     logging.error(f"Unhandled exception: {exc}")
-    return {"detail": "Internal server error"}
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
 # Update the main execution block
 if __name__ == "__main__":

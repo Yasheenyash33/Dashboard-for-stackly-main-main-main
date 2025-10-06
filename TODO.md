@@ -1,11 +1,3 @@
-# Fix CORS and WebSocket Errors
-
-## Steps to Complete
-- [ ] Fix WebSocket URL in frontend (AuthContext.jsx) to include "/ws" path
-- [ ] Add token verification on WebSocket connection in backend (main.py)
-- [ ] Ensure CORS headers are properly set for WebSocket handshake in backend
-
-## Followup Steps
-- [ ] Test fetch requests to /assignments/, /sessions/, /users/ endpoints
-- [ ] Test WebSocket connection and real-time updates
-- [ ] Verify no more CORS or WebSocket errors in console
+- [x] Fix role authorization checks in backend/main.py to use .value for enum comparisons
+- [ ] Test session creation as trainer/admin
+- [ ] Verify other endpoints work after fix
