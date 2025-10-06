@@ -29,14 +29,18 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Training Management API", version="1.0.0")
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 # CORS middleware for frontend integration
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "ws://localhost:5173",
-    "ws://127.0.0.1:5173"
+    "ws://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "ws://localhost:5174",
+    "ws://127.0.0.1:5174"
 ]
 
 app.add_middleware(
@@ -277,9 +281,13 @@ async def unassign_student(student_id: int, teacher_id: int, db: Session = Depen
 # User routes
 @app.get("/users/", response_model=List[schemas.User])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    logging.info(f"read_users called by user {current_user.username} with role {current_user.role}")
     if current_user.role not in ["admin", "trainer"]:
+        logging.warning(f"User {current_user.username} not authorized for users")
         raise HTTPException(status_code=403, detail="Not authorized")
     users = crud.get_users(db, skip=skip, limit=limit)
+    logging.info(f"Retrieved {len(users)} users")
+    logging.info("read_users completed")
     return users
 
 @app.get("/users/{user_id}", response_model=schemas.User)
@@ -374,7 +382,10 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), current_user:
 # Session routes
 @app.get("/sessions/", response_model=List[schemas.Session])
 def read_sessions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    logging.info(f"read_sessions called by user {current_user.username} with role {current_user.role}")
     sessions = crud.get_sessions(db, skip=skip, limit=limit)
+    logging.info(f"Retrieved {len(sessions)} sessions")
+    logging.info("read_sessions completed")
     return sessions
 
 @app.get("/sessions/{session_id}", response_model=schemas.Session)

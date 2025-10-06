@@ -338,7 +338,8 @@ export function AuthProvider({ children }) {
         throw new Error(errorMessage);
       }
       const newUser = await res.json();
-      // No need to update users here, WebSocket will handle it
+      // Update users state immediately for immediate UI update
+      setUsers(prev => [...prev, newUser]);
       return newUser;
     } catch (error) {
       console.error('Create user error:', error.message || error);
